@@ -1,5 +1,6 @@
 from random import gauss, randrange
 from statistics import mean, stdev
+from time import sleep
 
 import xlrd
 
@@ -14,32 +15,33 @@ class Forward(object):
         self.index_carbon = 13
 
     def compute_strength(self, arr):
-        print("Forward.compute_strength:arr=", arr)
-        avg = mean(arr)
+        # print("Forward.compute_strength:arr=", arr)
+        avg = mean(arr)  # 该行原始数据的平均值
         col0 = sheet_modify.col_values(0)
         n_row_arg = col0.index(int(avg + 0.5))
         n_col_arg = self.index_avg
 
         modify_arg = sheet_modify.cell_value(n_row_arg, n_col_arg)
 
-        avg += modify_arg
+        avg += modify_arg  # 加上角度修正值
 
         col10 = sheet_modify.col_values(10)
         n_row_face = col10.index(int(avg + 0.5))
         n_col_face = 10 + self.index_face
         modify_face = sheet_modify.cell_value(n_row_face, n_col_face)
 
-        avg += modify_face
+        avg += modify_face  # 加上浇筑面修正值
 
         n_col_carbon = self.index_carbon
         n_row_carbon = sheet_carbon.col_values(0).index(int(avg + 0.5))
 
-        avg = sheet_carbon.cell_value(n_row_carbon, n_col_carbon)
+        avg = sheet_carbon.cell_value(n_row_carbon, n_col_carbon)  # 经过碳化深度换算
         # print("result avg=", avg)
         return avg
 
     @staticmethod
     def print_computed_arr(arr):
+        # print("arr which to computed = ", arr)
         val_avg = mean(arr)
         val_stddev = stdev(arr)
         val_min = min(arr)
@@ -50,9 +52,9 @@ class Utils(object):
     def __init__(self, arr1=None, arr2=None):
         self.index_arr_source = arr1
         self.value_arr_source = arr2
-        self.s_ave = 43.3
-        self.s_sigma = 4.69
-        self.s_min = 35.5
+        self.s_ave = 27.5
+        self.s_sigma = 2.59
+        self.s_min = 22.5
 
     def index_of_arr(self, val):
         # arr_source = col13
@@ -69,7 +71,8 @@ class Utils(object):
             if val == _v:
                 index = key
             elif val < _v:
-                index = key if key >= (self.index_arr_source[key] + self.index_arr_source[key - 1]) / 2 else (key - 1)
+                index = key if key >= (self.index_arr_source[key] + self.index_arr_source[
+                    key - 1]) / 2 else (key - 1)
                 break
         return index
 
@@ -93,16 +96,18 @@ class Utils(object):
 
         self.index_arr_source = col13
         indexes_carbon = list(map(self.index_of_arr, arr))
-        print("indexes_carbon:", indexes_carbon)
+        # print("indexes_carbon:", indexes_carbon)
 
         self.value_arr_source = col0
         values_carbon = list(map(self.value_of_arr, indexes_carbon))
+        # print("values_carbon = ", values_carbon)
 
         self.index_arr_source = arr_to_search
         indexes_face = list(map(self.index_of_arr, values_carbon))
 
         self.value_arr_source = sheet_modify.col_values(10)
         values_face = list(map(self.value_of_arr, indexes_face))
+        # print("values_face = ", values_face)
         return values_face
 
     def generate_origin(self, need_input):
@@ -121,6 +126,7 @@ class Utils(object):
 
         s_count = 10
 
+        # 最终结果数组
         array = list()
         # while len(array) == 0 or min(array) < 10.1 or max(array) > 56.4:
         while True:
@@ -128,26 +134,33 @@ class Utils(object):
             for key in range(s_count):
                 array.append(gauss(self.s_ave, self.s_sigma))
 
-            if min(array) < 10.1 or max(array) > 56.4:
+            # 限制碳化列表最终值范围
+            if min(array) < 10.1 or max(array) > 39.1:
                 print("数据范围不正确, 重新生成...")
             else:
                 break
-
-        avers = Utils().backward(array)
+        # print("final data = ", array)
+        # 原始数据的平均值列表
+        avers = Utils().backward(array)  # todo
+        # print("original avg data = ", avers)
+        # 原始数据，list每个元素是一行数据
         arr = list()
         # while True:
-        for key in avers:
+        for i in range(len(avers)):
             #         while True:
-            temp_arr = list()
-            for j in range(10):
-                temp_arr.append(gauss(key, 1))
-                #             if min(temp_arr) >= 20 and max(temp_arr) <= 50:
-                arr.append(temp_arr)
-        # break
-        #             else:
-        #                 print(array)
-        #                 print(avers)
-        #                 print("生成数据范围有误...")
+            while True:
+                # sleep(0.5)
+                temp_arr = list()
+                for j in range(10):
+                    temp_arr.append(gauss(avers[i], 3))
+                # print("arr[i]=", avers[i], ",min=", min(temp_arr), ",max=", max(temp_arr))
+                if min(temp_arr) >= 20 and max(temp_arr) <= 50:
+                    arr.append(temp_arr)
+                    break
+                else:
+                    # print(array)
+                    # print(avers)
+                    print("第", i, "行原始数据", temp_arr, "有误，重新生成")
 
         return arr
 
@@ -156,23 +169,26 @@ utils = Utils()
 forward = Forward()
 need = True
 
-ll = set()
+# ll = set()
 while True:
     while True:
         arr_list = utils.generate_origin(need)
-        avg_arr = list(map(forward.compute_strength, arr_list))
-        result = forward.print_computed_arr(avg_arr)
-        if abs(utils.s_min - result[2]) > 0.1:
-            print("最小值偏差太大, 重新生成...")
+        #        print("原始数据：", arr_list)
+        avg_arr = list(map(forward.compute_strength, arr_list))  # 正向计算结果数组
+        result = forward.print_computed_arr(avg_arr)  # 结果数组的均值和方差
+        # print("result = ", result)
+        if abs(utils.s_min - result[2]) > 0.3:
+            print("最小值偏差=", abs(utils.s_min - result[2]), ",太大, 重新生成...")
             v = utils.s_min - result[2]
-            ll.add(v)
-            print(len(ll))
+            # ll.add(v)
+            # print(len(ll))
             need = False
-        elif abs(utils.s_ave - result[0]) > 0.3:
-            print("均值偏差太大, 重新生成...")
+        elif abs(utils.s_ave - result[0]) > 0.5:
+            print("均值偏差", abs(utils.s_ave - result[0]), "太大, 重新生成...")
             need = False
         else:
             break
+        sleep(1)
 
     print("预期:均值=%s, 标准差=%s, 最小值=%s" % (utils.s_ave, utils.s_sigma, utils.s_min))
     print("结果:均值=%s, 标准差=%s, 最小值=%s" % (result[0], result[1], result[2]))
